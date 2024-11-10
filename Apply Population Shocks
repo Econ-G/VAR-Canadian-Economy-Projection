@@ -1,0 +1,155 @@
+rm(list=ls())
+
+install.packages("urca")
+install.packages("vars")
+install.packages("mFilter")
+install.packages("tseries")
+install.packages("TSstudio")
+install.packages("forecast")
+install.packages("tidyverse")
+library(urca)
+library(vars)
+library(mFilter)
+library(tseries)
+library(TSstudio)
+library(forecast)
+library(tidyverse)
+mp <- read.csv(choose.files())
+
+head(mp)
+
+#ln_lnf,unemp,ONR ,lnGDP,WTI
+ln_inf <- ts(mp$ln_INF, start = c(2000,1,1), frequency = 12)
+ln_unem <- ts(mp$ln_Unem, start = c(2000,1,1), frequency = 12)
+ln_or <- ts(mp$ln_Or, start = c(2000,1,1), frequency = 12)
+ln_WTI <- ts(mp$ln_WTI, start = c(2000,1,1), frequency = 12)
+ln_pop <- ts(mp$ln_pop, start = c(2000,1,1), frequency = 12)
+ln_gdp_capita <- ts(mp$ln_gdp_per_capita, start = c(2000,1,1), frequency = 12)
+
+endogen <- cbind(ln_inf,ln_unem,ln_or,ln_gdp_capita)
+exogen<- cbind(ln_pop, ln_WTI)
+lagselect <- VARselect(endogen, lag.max = 15, type = "both")
+lagselect$selection
+lagselect
+#Building VAR
+Model1 <- VAR(endogen, p = 2, type = "const", season = NULL,exog = exogen )
+summary(Model1)
+
+
+
+pop_p <- 401500/12
+
+
+pop_proj <- read.csv(choose.files())
+
+
+low_pop_proj= cbind(tail(pop_proj$low,15),0)
+low_pop_proj2= cbind(tail(pop_proj$low,15),tail(mp$ln_WTI,15))
+high_pop_proj=cbind(tail(pop_proj$high,15),tail(mp$ln_WTI,15))
+
+forecastlowproj <- predict(Model1, n.ahead = 15, dumvar=low_pop_proj, ci = 0.95)
+forecastlowproj2 <- predict(Model1, n.ahead = 15, dumvar=low_pop_proj2, ci = 0.95)
+forecasthighproj <- predict(Model1, n.ahead = 15, dumvar=high_pop_proj, ci = 0.95)
+par(mar = c(4, 4, 2, 1))
+plot(forecastlowproj2)
+plot(forecasthighproj)
+
+
+par(mar = c(4, 4, 2, 1))
+
+forecasthighproj$fcst
+
+names(forecasthighproj)
+names(forecasthighproj$fcst)
+names(forecasthighproj$fcst$ln_gdp_capita)
+# Check the structure of the forecast object for ln_gdp_capita
+str(forecasthighproj$fcst$ln_gdp_capita)
+
+
+forecast_values <- forecasthighproj$fcst[["ln_gdp_capita"]]
+# Extract forecast values for plotting
+forecast_values_fcst <- forecast_values[, "fcst"]
+
+# Plot the forecasted values for ln_gdp_capita
+plot(forecast_values_fcst, type = "l", col = "blue", 
+     xlab = "Time Period", ylab = "Forecasted ln_gdp_capita", 
+     main = "Forecast for ln_gdp_capita")
+
+
+# Extracting the forecast data for each variable
+# List of variables to plot
+variables <- c("ln_inf", "ln_unem", "ln_or", "ln_gdp_capita")
+
+# Loop through each variable
+for (var in variables) {
+  # Extract forecast values for the current variable
+  forecast_values <- forecasthighproj$fcst[[var]]
+  forecast_values_fcst <- forecast_values[, "fcst"]
+  forecast_values_lower <- forecast_values[, "lower"]
+  forecast_values_upper <- forecast_values[, "upper"]
+  
+  # Adjust the y-axis limits to ensure the entire range is visible
+  y_min <- min(forecast_values_lower, na.rm = TRUE)
+  y_max <- max(forecast_values_upper, na.rm = TRUE)
+  
+  # Plot the forecasted values for the current variable
+  plot(forecast_values_fcst, type = "l", col = "blue", 
+       xlab = "Time Period", ylab = paste("Forecasted", var), 
+       main = paste("Forecast for", var), 
+       ylim = c(y_min, y_max), # Set y-axis limits to show the full range
+       lwd = 2)
+  
+  # Add the lower and upper bounds as dashed red lines
+  lines(forecast_values_lower, col = "red", lty = 2, lwd = 2)
+  lines(forecast_values_upper, col = "red", lty = 2, lwd = 2)
+  
+  # Add shaded area between lower and upper bounds (confidence interval)
+  polygon(c(1:length(forecast_values_fcst), rev(1:length(forecast_values_fcst))), 
+          c(forecast_values_lower, rev(forecast_values_upper)), 
+          col = rgb(1, 0, 0, alpha = 0.2), border = NA)
+  
+  # Optionally, add a legend
+  legend("topright", legend = c("Forecast", "Lower Bound", "Upper Bound"), 
+         col = c("blue", "red", "red"), lty = c(1, 2, 2), lwd = 2)
+  
+  # Pause for a moment to display each plot
+  Sys.sleep(1)  # Adjust the time interval as needed (in seconds)
+}
+
+# Redo for low
+for (var in variables) {
+  # Extract forecast values for the current variable
+  forecast_values <- forecastlowproj2$fcst[[var]]
+  forecast_values_fcstl <- forecast_valuesl[, "fcst"]
+  forecast_values_lowerl <- forecast_valuesl[, "lower"]
+  forecast_values_upperl <- forecast_valuesl[, "upper"]
+  
+  # Adjust the y-axis limits to ensure the entire range is visible
+  y_minl <- min(forecast_values_lowerl, na.rm = TRUE)
+  y_maxl <- max(forecast_values_upperl, na.rm = TRUE)
+  
+  # Plot the forecasted values for the current variable
+  plot(forecast_values_fcstl, type = "l", col = "blue", 
+       xlab = "Time Period", ylab = paste("Forecasted", var), 
+       main = paste("Forecast for", var), 
+       ylim = c(y_minl, y_maxl), # Set y-axis limits to show the full range
+       lwd = 2)
+  
+  # Add the lower and upper bounds as dashed red lines
+  lines(forecast_values_lowerl, col = "red", lty = 2, lwd = 2)
+  lines(forecast_values_upperl, col = "red", lty = 2, lwd = 2)
+  
+  # Add shaded area between lower and upper bounds (confidence interval)
+  polygon(c(1:length(forecast_values_fcst), rev(1:length(forecast_values_fcst))), 
+          c(forecast_values_lowerl, rev(forecast_values_upper)), 
+          col = rgb(1, 0, 0, alpha = 0.2), border = NA)
+  
+  # Optionally, add a legend
+  legend("topright", legend = c("Forecast", "Lower Bound", "Upper Bound"), 
+         col = c("blue", "red", "red"), lty = c(1, 2, 2), lwd = 2)
+  
+  # Pause for a moment to display each plot
+  Sys.sleep(1)  # Adjust the time interval as needed (in seconds)
+}
+
+forecastlowproj2
