@@ -1,0 +1,128 @@
+#Install the vars package
+
+install.packages("vars")
+rm(list=ls())
+#Load required packages for running VAR
+
+library(urca)
+library(vars)
+library(mFilter)
+library(tseries)
+library(TSstudio)
+library(forecast)
+library(tidyverse)
+
+mp <- read_csv(file.choose())
+head(mp)
+
+#ln_lnf,unemp,ONR ,lnGDP,WTI
+ln_inf <- ts(mp$ln_INF, start = c(2000,1,1), frequency = 12)
+ln_unem <- ts(mp$ln_Unem, start = c(2000,1,1), frequency = 12)
+ln_or <- ts(mp$ln_Or, start = c(2000,1,1), frequency = 12)
+ln_WTI <- ts(mp$ln_WTI, start = c(2000,1,1), frequency = 12)
+ln_pop <- ts(mp$ln_pop, start = c(2000,1,1), frequency = 12)
+ln_gdp_capita <- ts(mp$ln_gdp_per_capita, start = c(2000,1,1), frequency = 12)
+
+
+#pp.test
+pp.test(ln_inf)
+pp.test(ln_unem)
+pp.test(ln_WTI)
+pp.test(ln_or)
+pp.test(ln_pop)
+pp.test(ln_gdp_capita)
+
+
+#plot
+ts_plot(ca_gdp)
+ts_plot(ca_cpi)
+ts_plot(shelter)
+ts_plot(or)
+ts_plot(unemp)
+ts_plot(us_gdp)
+ts_plot(ln_pop)
+
+#Find the Optimal lags
+endogen <- cbind(ln_inf,ln_unem,ln_or,ln_gdp_capita)
+exogen<- cbind(ln_pop, ln_WTI)
+lagselect <- VARselect(endogen, lag.max = 15, type = "both")
+lagselect$selection
+lagselect
+#Building VAR
+Model1 <- VAR(endogen, p = 2, type = "const", season = NULL,exog = exogen )
+summary(Model1)
+
+#Diagnosing the VAR
+
+#Serial Correlation
+
+Serial1 <- serial.test(Model1, lags.pt = 5, type = "PT.asymptotic")
+Serial1
+
+#Heteroscedasticity
+
+Arch1 <- arch.test(Model1, lags.multi = 15, multivariate.only = TRUE)
+Arch1
+
+
+#Normal Distribution of the Residuals
+
+Norm1 <- normality.test(Model1, multivariate.only = TRUE)
+Norm1
+
+#Testing for Structural Breaks in the Residuals
+
+Stability1 <- stability(Model1, type = "OLS-CUSUM")
+plot(Stability1)
+
+#Granger Causality
+
+#ln_lnf,unemp,ONR,lnGDP,WTI
+Grangerln_inf<- causality(Model1, cause = "ln_inf")
+Grangerln_inf
+
+Grangerln_unem<- causality(Model1, cause = "ln_unem")
+Grangerln_unem
+
+Grangerln_WTI<- causality(Model1, cause = "ln_WTI")
+Grangerln_WTI
+
+
+Grangerln_or<- causality(Model1, cause = "ln_or")
+Grangerln_or
+
+Grangerln_pop<- causality(Model1, cause = "ln_pop")
+Grangerln_pop
+
+Grangerln_gdp_capita<- causality(Model1, cause = "ln_gdp_capita")
+Grangerln_gdp_capita
+##All pass the test
+
+#Impulse Response Functions
+
+ln_infirf <- irf(Model1, impulse = "ln_inf", response = "ln_inf", n.ahead =20, boot = TRUE)
+plot(ln_infirf, ylab = "ln_inf", main = "ln_inf's shock to ln_inf")
+
+ln_infiirf <- irf(Model1, impulse = "ln_inf", response = "ln_unem", n.ahead = 20, boot = TRUE)
+plot(ln_infirf, ylab = "ln_unem", main = "ln_inf's shock to ln_unem")
+#Philips Curve
+
+GDPirf <- irf(Model1, impulse = "ONR", response = "lnGDP", n.ahead = 4, boot = TRUE)
+plot(GDPirf, ylab = "lnGDP", main = "ONR's shock to GDP")
+
+Pop_GDPirf <- irf(Model1, impulse = "ln_pop", response = "ln_gdp_capita", n.ahead = 20, boot = TRUE)
+plot(Pop_GDPirf, ylab = "ln_gdp_capita", main = "Pop's shock to ln_GDP_Per_Capita")
+
+#Variance Decomposition
+
+FEVD1 <- fevd(Model1, n.ahead =10)
+FEVD1
+plot(FEVD1)
+
+#VAR Forecasting
+future_ln_pop = cbind(tail(mp$ln_pop,12),tail(mp$ln_WTI,12))
+forecast <- predict(Model1, n.ahead = 12, dumvar=future_ln_pop, ci = 0.95)
+par(mar = c(4, 4, 2, 1))
+plot(forecast)
+print(forecast)
+plot(forecast$endog)
